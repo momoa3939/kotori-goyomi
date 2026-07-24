@@ -383,7 +383,7 @@ header .sub{
 .mark-symptom{
   width:5px;height:5px;
   border-radius:50%;
-  background:#C79B75;
+  background:var(--sage);
 }
 .mark-blood{
   width:5px;height:5px;
@@ -393,12 +393,11 @@ header .sub{
 .mark-heart{
   font-size:8.5px;
   line-height:1;
-  color:var(--pink-deep);
 }
 .mark-other{
   width:5px;height:5px;
   border-radius:50%;
-  background:var(--sage);
+  background:#E8935A;
 }
 
 .note-form .field{margin-bottom:14px;}
@@ -449,6 +448,23 @@ header .sub{
 .weight-unit{font-size:14px;color:var(--text-soft);flex-shrink:0;}
 
 .split-row{display:flex;gap:8px;}
+
+.ym-row{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  margin-bottom:8px;
+  font-size:13.5px;
+  color:var(--text-soft);
+}
+.ym-row select{
+  padding:8px 6px;
+  border-radius:12px;
+  border:1.5px solid var(--line);
+  font-size:15px;
+  color:var(--text);
+  background:#FFFDFC;
+}
 .split-row .weight-input-row{flex:1;min-width:0;}
 
 .heart-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;}
@@ -488,6 +504,11 @@ header .sub{
   background:var(--pink-light);
   border-color:var(--pink);
   color:var(--pink-deep);
+}
+.heart-btn.on-blue{
+  background:#E1EEFB;
+  border-color:#8FB8E0;
+  color:#4A79A8;
 }
 
 .avg-row{
@@ -833,10 +854,12 @@ function renderFlower(phase){
 function noteMarkers(dateStr){
   const note = dailyNotes[dateStr];
   if(!note) return '';
+  const BLOOD_COLORS = {1:'#F4C6D3', 2:'#EDA0B8', 3:'#E5789D', 4:'#D94F82'};
   let m = '';
   if(note.symptoms && note.symptoms.length) m += '<span class="mark-symptom"></span>';
-  if(note.blood) m += '<span class="mark-blood"></span>';
+  if(note.blood) m += `<span class="mark-blood" style="background:${BLOOD_COLORS[note.blood]||BLOOD_COLORS[4]}"></span>`;
   if(note.heart === 'あり') m += '<span class="mark-heart">❤️</span>';
+  if(note.heart === 'なし') m += '<span class="mark-heart">💙</span>';
   if(note.weight || note.temperature) m += '<span class="mark-other"></span>';
   return m;
 }
@@ -860,10 +883,23 @@ function renderCalendar(stats){
     if(stats.predictNext){
       const predEnd = addDays(stats.predictNext, stats.avgPeriod-1);
       if(dateStr >= stats.predictNext && dateStr <= predEnd) return 'predicted';
-      const peakStart = addDays(stats.predictOvulation, -1);
-      const peakEnd = addDays(stats.predictOvulation, 1);
-      if(dateStr >= peakStart && dateStr <= peakEnd) return 'fertile-peak';
-      if(dateStr >= stats.fertileStart && dateStr <= stats.fertileEnd) return 'fertile-mid';
+    }
+    // その日が属する周期（過去 or 直近）を見つけて、その周期なりの妊娠しやすい時期を計算する
+    const sorted = [...records].sort((a,b)=> a.start < b.start ? -1 : 1);
+    for(let i=0;i<sorted.length;i++){
+      const A = sorted[i];
+      const nextStart = sorted[i+1] ? sorted[i+1].start : stats.predictNext;
+      if(!nextStart) continue;
+      if(dateStr >= A.start && dateStr < nextStart){
+        const ovulation = addDays(nextStart, -14);
+        const peakStart = addDays(ovulation, -1);
+        const peakEnd = addDays(ovulation, 1);
+        const midStart = addDays(ovulation, -5);
+        const midEnd = addDays(ovulation, 1);
+        if(dateStr >= peakStart && dateStr <= peakEnd) return 'fertile-peak';
+        if(dateStr >= midStart && dateStr <= midEnd) return 'fertile-mid';
+        return '';
+      }
     }
     return '';
   }
@@ -901,9 +937,9 @@ function renderCalendar(stats){
     </div>
     <div class="legend">
       <span><span class="dot" style="background:var(--pink-deep);"></span>血量</span>
-      <span><span class="dot" style="background:#C79B75;"></span>症状</span>
-      <span>❤️ 記録あり</span>
-      <span><span class="dot" style="background:var(--sage);"></span>体重・体温</span>
+      <span><span class="dot" style="background:var(--sage);"></span>症状</span>
+      <span>❤️/💙 記録あり</span>
+      <span><span class="dot" style="background:#E8935A;"></span>体重・体温</span>
     </div>
   </div>`;
 }
@@ -1068,11 +1104,27 @@ function renderQuickNoteForm(){
       const on = (existing.symptoms||[]).includes(s) ? ' on' : '';
       chips += `<button type="button" class="chip${on}" data-symptom="${s}" onclick="quickToggleChip(this)">${s}</button>`;
     });
-    const heartOn = currentQuickHeart==='あり' ? ' on' : '';
+    const heartOn = currentQuickHeart==='あり' ? ' on' : (currentQuickHeart==='なし' ? ' on-blue' : '');
+    const heartSymbol = currentQuickHeart==='あり' ? '❤️' : (currentQuickHeart==='なし' ? '💙' : '♡');
+
+    const [qy, qm] = quickNoteDate.split('-').map(Number);
+    const thisYear = new Date().getFullYear();
+    let yearOpts = '';
+    for(let y=thisYear-8; y<=thisYear+1; y++){
+      yearOpts += `<option value="${y}"${y===qy?' selected':''}>${y}</option>`;
+    }
+    let monthOpts = '';
+    for(let mo=1; mo<=12; mo++){
+      monthOpts += `<option value="${mo}"${mo===qm?' selected':''}>${mo}</option>`;
+    }
 
     body = `
       <div class="field">
         <label>日付</label>
+        <div class="ym-row">
+          <select id="quickYearSelect" onchange="quickJumpYM()">${yearOpts}</select><span>年</span>
+          <select id="quickMonthSelect" onchange="quickJumpYM()">${monthOpts}</select><span>月</span>
+        </div>
         <input type="date" id="quickDateInput" value="${quickNoteDate}" onchange="quickDateChange(this.value)">
       </div>
       <div class="field">
@@ -1081,7 +1133,7 @@ function renderQuickNoteForm(){
       </div>
       <div class="field">
         <label>症状</label>
-        <div class="chip-row" id="quickChipRow">${chips}<button type="button" class="heart-btn${heartOn}" id="quickHeartBtn" style="margin-left:auto;" onclick="quickToggleHeartChoices()">❤️</button></div>
+        <div class="chip-row" id="quickChipRow">${chips}<button type="button" class="heart-btn${heartOn}" id="quickHeartBtn" style="margin-left:auto;" onclick="quickToggleHeartChoices()">${heartSymbol}</button></div>
         <div class="heart-choices" id="quickHeartChoices">
           <button type="button" class="heart-choice-btn" data-val="あり" onclick="quickSelectHeart('あり')">あり</button>
           <button type="button" class="heart-choice-btn" data-val="なし" onclick="quickSelectHeart('なし')">なし</button>
@@ -1100,6 +1152,10 @@ function renderQuickNoteForm(){
             <span class="weight-unit">℃</span>
           </div>
         </div>
+      </div>
+      <div class="field">
+        <label>メモ（任意）</label>
+        <input type="text" id="quickNoteMemo" placeholder="体調など" value="${existing.note ? existing.note.replace(/"/g,'&quot;') : ''}">
       </div>
       <button class="btn" onclick="saveQuickNote()">保存する</button>
       ${dailyNotes[quickNoteDate] ? `<button class="btn ghost" onclick="deleteQuickNote()">この日の記録を削除する</button>` : ''}
@@ -1234,9 +1290,11 @@ window.closeDayMenu = function(){
 };
 
 window.menuSetStart = async function(dateStr){
-  const ok = await customConfirm(`${fmtLong(dateStr)}を生理開始日として記録しますか？`);
+  const stats = computeStats();
+  const autoEnd = addDays(dateStr, stats.avgPeriod - 1);
+  const ok = await customConfirm(`${fmtLong(dateStr)}を生理開始日として記録しますか？\n（${stats.avgPeriod}日間として自動で終了日も設定します。あとから記録一覧で調整できます）`);
   if(!ok) return;
-  records.push({id: uid(), start: dateStr, end: null, note:''});
+  records.push({id: uid(), start: dateStr, end: autoEnd, note:''});
   await saveData();
   closeDayMenu();
   render();
@@ -1314,6 +1372,11 @@ window.openNoteModal = function(dateStr){
           </div>
         </div>
 
+        <div class="field">
+          <label style="display:block;font-size:11.5px;color:var(--text-soft);margin-bottom:6px;">メモ（任意）</label>
+          <input type="text" id="dailyNoteMemo" placeholder="体調など" value="${existing.note ? existing.note.replace(/"/g,'&quot;') : ''}">
+        </div>
+
         <button class="menu-btn" onclick="saveNote('${dateStr}')">保存する</button>
         ${dailyNotes[dateStr] ? `<button class="menu-btn danger" onclick="deleteNote('${dateStr}')">この日の記録を削除する</button>` : ''}
         <button class="menu-btn cancel" onclick="closeDayMenu()">キャンセル</button>
@@ -1368,7 +1431,11 @@ function updateHeartUI(){
   const btn = root.querySelector('#heartBtn');
   const label = root.querySelector('#heartLabel');
   const choiceBtns = root.querySelectorAll('.heart-choice-btn');
-  if(btn) btn.classList.toggle('on', currentHeart === 'あり');
+  if(btn){
+    btn.classList.toggle('on', currentHeart === 'あり');
+    btn.classList.toggle('on-blue', currentHeart === 'なし');
+    btn.textContent = currentHeart === 'あり' ? '❤️' : (currentHeart === 'なし' ? '💙' : '♡');
+  }
   if(label) label.textContent = currentHeart || '';
   choiceBtns.forEach(b=> b.classList.toggle('on', b.dataset.val === currentHeart));
 }
@@ -1383,10 +1450,11 @@ window.saveNote = async function(dateStr){
   const weight = weightVal ? Number(weightVal) : null;
   const tempVal = document.getElementById('tempInput').value;
   const temperature = tempVal ? Number(tempVal) : null;
+  const noteVal = document.getElementById('dailyNoteMemo').value.trim();
   const blood = currentStar || null;
   const heart = currentHeart;
 
-  const isEmpty = !blood && symptoms.length===0 && !weight && !temperature && !heart;
+  const isEmpty = !blood && symptoms.length===0 && !weight && !temperature && !heart && !noteVal;
   if(isEmpty){
     delete dailyNotes[dateStr];
   }else{
@@ -1395,7 +1463,7 @@ window.saveNote = async function(dateStr){
       const ok = await customConfirm(`${fmtLong(dateStr)}の記録を上書きしますか？`);
       if(!ok) return;
     }
-    dailyNotes[dateStr] = {blood, symptoms, weight, temperature, heart};
+    dailyNotes[dateStr] = {blood, symptoms, weight, temperature, heart, note: noteVal};
   }
   await saveNotes();
   closeDayMenu();
@@ -1430,6 +1498,16 @@ window.quickDateChange = function(val){
   render();
   const el = document.getElementById('quickForm');
   if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+};
+
+window.quickJumpYM = function(){
+  const y = Number(document.getElementById('quickYearSelect').value);
+  const m = Number(document.getElementById('quickMonthSelect').value);
+  const curDay = Number(quickNoteDate.split('-')[2]);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const day = Math.min(curDay, daysInMonth);
+  const newDate = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  quickDateChange(newDate);
 };
 
 window.quickToggleStar = function(n){
@@ -1471,7 +1549,11 @@ function updateQuickHeartUI(){
   const btn = root.querySelector('#quickHeartBtn');
   const label = root.querySelector('#quickHeartLabel');
   const choiceBtns = root.querySelectorAll('.heart-choice-btn');
-  if(btn) btn.classList.toggle('on', currentQuickHeart === 'あり');
+  if(btn){
+    btn.classList.toggle('on', currentQuickHeart === 'あり');
+    btn.classList.toggle('on-blue', currentQuickHeart === 'なし');
+    btn.textContent = currentQuickHeart === 'あり' ? '❤️' : (currentQuickHeart === 'なし' ? '💙' : '♡');
+  }
   if(label) label.textContent = currentQuickHeart || '';
   choiceBtns.forEach(b=> b.classList.toggle('on', b.dataset.val === currentQuickHeart));
 }
@@ -1484,10 +1566,11 @@ window.saveQuickNote = async function(){
   const weight = weightVal ? Number(weightVal) : null;
   const tempVal = document.getElementById('quickTempInput').value;
   const temperature = tempVal ? Number(tempVal) : null;
+  const noteVal = document.getElementById('quickNoteMemo').value.trim();
   const blood = currentQuickStar || null;
   const heart = currentQuickHeart;
 
-  const isEmpty = !blood && symptoms.length===0 && !weight && !temperature && !heart;
+  const isEmpty = !blood && symptoms.length===0 && !weight && !temperature && !heart && !noteVal;
   if(isEmpty){
     if(dailyNotes[dateStr]){
       const ok = await customConfirm(`${fmtLong(dateStr)}の記録を削除しますか？`);
@@ -1503,7 +1586,7 @@ window.saveQuickNote = async function(){
       const ok = await customConfirm(`${fmtLong(dateStr)}の記録を上書きしますか？`);
       if(!ok) return;
     }
-    dailyNotes[dateStr] = {blood, symptoms, weight, temperature, heart};
+    dailyNotes[dateStr] = {blood, symptoms, weight, temperature, heart, note: noteVal};
   }
   await saveNotes();
   quickNoteOpen = false;
