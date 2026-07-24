@@ -32,6 +32,7 @@
 }
 
 *{box-sizing:border-box;}
+html{overflow-x:hidden;width:100%;}
 body{
   margin:0;
   font-family:'Zen Kaku Gothic New','Zen Maru Gothic',sans-serif;
@@ -39,9 +40,11 @@ body{
   color:var(--text);
   padding:20px 14px 60px;
   min-height:100vh;
+  overflow-x:hidden;
+  width:100%;
 }
 
-.wrap{max-width:480px;margin:0 auto;}
+.wrap{max-width:480px;margin:0 auto;width:100%;}
 
 header{
   text-align:center;
@@ -643,11 +646,15 @@ let viewMonth = new Date();
 viewMonth.setDate(1);
 let editingId = null;
 let showAddForm = false;
+let quickNoteOpen = false;
+let quickNoteDate = toDateStr(new Date());
+let currentQuickStar = 0;
+let currentQuickHeart = null;
 let showHistory = true;
 let showFuturePredict = false;
 let showWeightList = true;
-let historyExpanded = false;
-let weightExpanded = false;
+let historyVisibleCount = 10;
+let weightVisibleCount = 10;
 let showDataManage = false;
 let showHelp = false;
 
@@ -908,7 +915,7 @@ function accordionCard(title, bodyHtml, isOpen, toggleFnName){
 function renderHistory(){
   if(records.length===0) return '';
   const rev = [...records].reverse();
-  const visible = historyExpanded ? rev : rev.slice(0, 10);
+  const visible = rev.slice(0, historyVisibleCount);
   const BAR_SCALE = 40; // バーの基準日数（この日数で満タン）
   let html = '';
   visible.forEach((r, idx)=>{
@@ -949,10 +956,11 @@ function renderHistory(){
       ${barHtml}
     </div>`;
   });
-  if(rev.length > 10){
-    html += historyExpanded
-      ? `<button class="btn ghost" onclick="toggleHistoryExpand()">▲ 閉じる（10件表示に戻す）</button>`
-      : `<button class="btn ghost" onclick="toggleHistoryExpand()">▼ もっと見る（全${rev.length}件）</button>`;
+  if(historyVisibleCount > 10){
+    html += `<button class="btn ghost" onclick="collapseHistory()">▲ 閉じる（10件表示に戻す）</button>`;
+  }
+  if(rev.length > historyVisibleCount){
+    html += `<button class="btn ghost" onclick="loadMoreHistory()">▼ もっと見る</button>`;
   }
   return accordionCard('記録一覧', html, showHistory, 'toggleHistory');
 }
@@ -965,7 +973,7 @@ function renderWeightList(){
 
   if(entries.length===0) return '';
 
-  const visible = weightExpanded ? entries : entries.slice(0, 10);
+  const visible = entries.slice(0, weightVisibleCount);
   let html = '';
   visible.forEach(d=>{
     const note = dailyNotes[d];
@@ -980,10 +988,11 @@ function renderWeightList(){
       </div>
     </div>`;
   });
-  if(entries.length > 10){
-    html += weightExpanded
-      ? `<button class="btn ghost" onclick="toggleWeightExpand()">▲ 閉じる（10件表示に戻す）</button>`
-      : `<button class="btn ghost" onclick="toggleWeightExpand()">▼ もっと見る（全${entries.length}件）</button>`;
+  if(weightVisibleCount > 10){
+    html += `<button class="btn ghost" onclick="collapseWeightList()">▲ 閉じる（10件表示に戻す）</button>`;
+  }
+  if(entries.length > weightVisibleCount){
+    html += `<button class="btn ghost" onclick="loadMoreWeightList()">▼ もっと見る</button>`;
   }
   return accordionCard('体重・体温の記録', html, showWeightList, 'toggleWeightList');
 }
@@ -1036,6 +1045,72 @@ function renderHelp(){
     </div>
   `;
   return accordionCard('使い方', body, showHelp, 'toggleHelp');
+}
+
+function renderQuickNoteForm(){
+  const arrow = quickNoteOpen ? '▲' : '▼';
+  let body = '';
+  if(quickNoteOpen){
+    const existing = dailyNotes[quickNoteDate] || {};
+    let stars = '';
+    for(let i=1;i<=4;i++){
+      const on = i<=currentQuickStar ? ' on' : '';
+      stars += `<button type="button" class="star-btn${on}" data-star="${i}" onclick="quickToggleStar(${i})">★</button>`;
+    }
+    let chips = '';
+    SYMPTOM_LIST.forEach(s=>{
+      const on = (existing.symptoms||[]).includes(s) ? ' on' : '';
+      chips += `<button type="button" class="chip${on}" data-symptom="${s}" onclick="quickToggleChip(this)">${s}</button>`;
+    });
+    const heartOn = currentQuickHeart==='あり' ? ' on' : '';
+
+    body = `
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="quickDateInput" value="${quickNoteDate}" onchange="quickDateChange(this.value)">
+      </div>
+      <div class="field">
+        <label>生理の血量</label>
+        <div class="star-row" id="quickStarRow">${stars}</div>
+      </div>
+      <div class="field">
+        <label>症状</label>
+        <div class="chip-row" id="quickChipRow">${chips}</div>
+      </div>
+      <div class="field">
+        <label>体重・体温</label>
+        <div class="split-row">
+          <div class="weight-input-row">
+            <input type="number" step="0.1" id="quickWeightInput" placeholder="体重" value="${existing.weight ?? ''}">
+            <span class="weight-unit">kg</span>
+          </div>
+          <div class="weight-input-row">
+            <input type="number" step="0.1" id="quickTempInput" placeholder="体温" value="${existing.temperature ?? ''}">
+            <span class="weight-unit">℃</span>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <div class="heart-row">
+          <div class="heart-choices" id="quickHeartChoices">
+            <button type="button" class="heart-choice-btn" data-val="あり" onclick="quickSelectHeart('あり')">あり</button>
+            <button type="button" class="heart-choice-btn" data-val="なし" onclick="quickSelectHeart('なし')">なし</button>
+          </div>
+          <button type="button" class="heart-btn${heartOn}" id="quickHeartBtn" onclick="quickToggleHeartChoices()">❤</button>
+        </div>
+        <div class="heart-label" id="quickHeartLabel">${currentQuickHeart || ''}</div>
+      </div>
+      <button class="btn" onclick="saveQuickNote()">保存する</button>
+      ${dailyNotes[quickNoteDate] ? `<button class="btn ghost" onclick="deleteQuickNote()">この日の記録を削除する</button>` : ''}
+    `;
+  }
+  return `<div class="card" id="quickForm">
+    <button class="accordion-header" onclick="toggleQuickNoteForm()">
+      <span>体調を記録する</span>
+      <span class="accordion-arrow">${arrow}</span>
+    </button>
+    ${body}
+  </div>`;
 }
 
 function render(){
@@ -1102,6 +1177,7 @@ function render(){
     </div>
 
     ${formCard}
+    ${renderQuickNoteForm()}
 
     ${renderCalendar(stats)}
     ${renderHistory()}
@@ -1255,7 +1331,7 @@ window.openNoteModal = function(dateStr){
   updateStarUI();
   updateHeartUI();
   (existing.symptoms||[]).forEach(s=>{
-    const el = document.querySelector(`.chip[data-symptom="${s}"]`);
+    const el = document.getElementById('dayMenuOverlay').querySelector(`.chip[data-symptom="${s}"]`);
     if(el) el.classList.add('on');
   });
 };
@@ -1267,31 +1343,36 @@ window.toggleStar = function(n){
   updateStarUI();
 };
 function updateStarUI(){
-  document.querySelectorAll('.star-btn').forEach(btn=>{
+  const root = document.getElementById('dayMenuOverlay');
+  if(!root) return;
+  root.querySelectorAll('.star-btn').forEach(btn=>{
     const v = Number(btn.dataset.star);
     btn.classList.toggle('on', v <= currentStar);
   });
 }
 window.toggleHeartChoices = function(){
+  const root = document.getElementById('dayMenuOverlay');
   if(currentHeart){
     currentHeart = null;
-    document.getElementById('heartChoices').style.display = 'none';
+    root.querySelector('.heart-choices').style.display = 'none';
     updateHeartUI();
     return;
   }
-  const el = document.getElementById('heartChoices');
+  const el = root.querySelector('.heart-choices');
   if(!el) return;
   el.style.display = (el.style.display === 'flex') ? 'none' : 'flex';
 };
 window.selectHeart = function(val){
   currentHeart = (currentHeart === val) ? null : val;
-  document.getElementById('heartChoices').style.display = 'none';
+  document.getElementById('dayMenuOverlay').querySelector('.heart-choices').style.display = 'none';
   updateHeartUI();
 };
 function updateHeartUI(){
-  const btn = document.getElementById('heartBtn');
-  const label = document.getElementById('heartLabel');
-  const choiceBtns = document.querySelectorAll('.heart-choice-btn');
+  const root = document.getElementById('dayMenuOverlay');
+  if(!root) return;
+  const btn = root.querySelector('#heartBtn');
+  const label = root.querySelector('#heartLabel');
+  const choiceBtns = root.querySelectorAll('.heart-choice-btn');
   if(btn) btn.classList.toggle('on', currentHeart === 'あり');
   if(label) label.textContent = currentHeart || '';
   choiceBtns.forEach(b=> b.classList.toggle('on', b.dataset.val === currentHeart));
@@ -1301,7 +1382,8 @@ window.toggleChip = function(el){
 };
 
 window.saveNote = async function(dateStr){
-  const symptoms = Array.from(document.querySelectorAll('.chip.on')).map(el=>el.dataset.symptom);
+  const root = document.getElementById('dayMenuOverlay');
+  const symptoms = Array.from(root.querySelectorAll('.chip.on')).map(el=>el.dataset.symptom);
   const weightVal = document.getElementById('weightInput').value;
   const weight = weightVal ? Number(weightVal) : null;
   const tempVal = document.getElementById('tempInput').value;
@@ -1331,6 +1413,115 @@ window.deleteNote = async function(dateStr){
   delete dailyNotes[dateStr];
   await saveNotes();
   closeDayMenu();
+  render();
+};
+
+// ---- 体調を記録する（カレンダーの日付タップなしで直接記録） ----
+window.toggleQuickNoteForm = function(){
+  quickNoteOpen = !quickNoteOpen;
+  if(quickNoteOpen){
+    const n = dailyNotes[quickNoteDate] || {};
+    currentQuickStar = n.blood || 0;
+    currentQuickHeart = n.heart || null;
+  }
+  render();
+};
+
+window.quickDateChange = function(val){
+  quickNoteDate = val;
+  const n = dailyNotes[val] || {};
+  currentQuickStar = n.blood || 0;
+  currentQuickHeart = n.heart || null;
+  render();
+  const el = document.getElementById('quickForm');
+  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+};
+
+window.quickToggleStar = function(n){
+  currentQuickStar = (currentQuickStar === n) ? 0 : n;
+  const root = document.getElementById('quickForm');
+  if(!root) return;
+  root.querySelectorAll('.star-btn').forEach(btn=>{
+    const v = Number(btn.dataset.star);
+    btn.classList.toggle('on', v <= currentQuickStar);
+  });
+};
+
+window.quickToggleChip = function(el){
+  el.classList.toggle('on');
+};
+
+window.quickToggleHeartChoices = function(){
+  const root = document.getElementById('quickForm');
+  if(currentQuickHeart){
+    currentQuickHeart = null;
+    root.querySelector('.heart-choices').style.display = 'none';
+    updateQuickHeartUI();
+    return;
+  }
+  const el = root.querySelector('.heart-choices');
+  if(!el) return;
+  el.style.display = (el.style.display === 'flex') ? 'none' : 'flex';
+};
+
+window.quickSelectHeart = function(val){
+  currentQuickHeart = (currentQuickHeart === val) ? null : val;
+  document.getElementById('quickForm').querySelector('.heart-choices').style.display = 'none';
+  updateQuickHeartUI();
+};
+
+function updateQuickHeartUI(){
+  const root = document.getElementById('quickForm');
+  if(!root) return;
+  const btn = root.querySelector('#quickHeartBtn');
+  const label = root.querySelector('#quickHeartLabel');
+  const choiceBtns = root.querySelectorAll('.heart-choice-btn');
+  if(btn) btn.classList.toggle('on', currentQuickHeart === 'あり');
+  if(label) label.textContent = currentQuickHeart || '';
+  choiceBtns.forEach(b=> b.classList.toggle('on', b.dataset.val === currentQuickHeart));
+}
+
+window.saveQuickNote = async function(){
+  const root = document.getElementById('quickForm');
+  const dateStr = quickNoteDate;
+  const symptoms = Array.from(root.querySelectorAll('.chip.on')).map(el=>el.dataset.symptom);
+  const weightVal = document.getElementById('quickWeightInput').value;
+  const weight = weightVal ? Number(weightVal) : null;
+  const tempVal = document.getElementById('quickTempInput').value;
+  const temperature = tempVal ? Number(tempVal) : null;
+  const blood = currentQuickStar || null;
+  const heart = currentQuickHeart;
+
+  const isEmpty = !blood && symptoms.length===0 && !weight && !temperature && !heart;
+  if(isEmpty){
+    if(dailyNotes[dateStr]){
+      const ok = await customConfirm(`${fmtLong(dateStr)}の記録を削除しますか？`);
+      if(!ok) return;
+      delete dailyNotes[dateStr];
+    }else{
+      await customAlert('内容を入力してから保存してね');
+      return;
+    }
+  }else{
+    const hadExisting = !!dailyNotes[dateStr];
+    if(hadExisting){
+      const ok = await customConfirm(`${fmtLong(dateStr)}の記録を上書きしますか？`);
+      if(!ok) return;
+    }
+    dailyNotes[dateStr] = {blood, symptoms, weight, temperature, heart};
+  }
+  await saveNotes();
+  quickNoteOpen = false;
+  render();
+};
+
+window.deleteQuickNote = async function(){
+  const dateStr = quickNoteDate;
+  const ok = await customConfirm('この日の体調記録を削除しますか？\nこの操作は元に戻せません。');
+  if(!ok) return;
+  delete dailyNotes[dateStr];
+  await saveNotes();
+  quickNoteOpen = false;
   render();
 };
 
@@ -1385,8 +1576,13 @@ window.toggleHistory = function(){
   render();
 };
 
-window.toggleHistoryExpand = function(){
-  historyExpanded = !historyExpanded;
+window.loadMoreHistory = function(){
+  historyVisibleCount += 10;
+  render();
+};
+
+window.collapseHistory = function(){
+  historyVisibleCount = 10;
   render();
 };
 
@@ -1395,8 +1591,13 @@ window.toggleWeightList = function(){
   render();
 };
 
-window.toggleWeightExpand = function(){
-  weightExpanded = !weightExpanded;
+window.loadMoreWeightList = function(){
+  weightVisibleCount += 10;
+  render();
+};
+
+window.collapseWeightList = function(){
+  weightVisibleCount = 10;
   render();
 };
 
