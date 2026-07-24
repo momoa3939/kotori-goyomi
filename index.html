@@ -452,7 +452,7 @@ header .sub{
 .split-row .weight-input-row{flex:1;min-width:0;}
 
 .heart-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;}
-.heart-choices{display:none;gap:6px;}
+.heart-choices{display:none;gap:6px;justify-content:flex-end;margin-top:8px;}
 .heart-choice-btn{
   padding:7px 14px;
   border-radius:999px;
@@ -836,7 +836,7 @@ function noteMarkers(dateStr){
   let m = '';
   if(note.symptoms && note.symptoms.length) m += '<span class="mark-symptom"></span>';
   if(note.blood) m += '<span class="mark-blood"></span>';
-  if(note.heart === 'あり') m += '<span class="mark-heart">❤</span>';
+  if(note.heart === 'あり') m += '<span class="mark-heart">❤️</span>';
   if(note.weight || note.temperature) m += '<span class="mark-other"></span>';
   return m;
 }
@@ -894,13 +894,15 @@ function renderCalendar(stats){
     <div class="legend">
       <span><span class="dot pink"></span>生理日</span>
       <span><span class="dot pinkline"></span>次回予測</span>
+    </div>
+    <div class="legend">
       <span><span class="dot sagedash"></span>妊娠しやすい(中)</span>
       <span><span class="dot sageline"></span>妊娠しやすい(高)</span>
     </div>
     <div class="legend">
-      <span><span class="dot" style="background:#C79B75;"></span>症状</span>
       <span><span class="dot" style="background:var(--pink-deep);"></span>血量</span>
-      <span>❤ 記録あり</span>
+      <span><span class="dot" style="background:#C79B75;"></span>症状</span>
+      <span>❤️ 記録あり</span>
       <span><span class="dot" style="background:var(--sage);"></span>体重・体温</span>
     </div>
   </div>`;
@@ -1079,7 +1081,12 @@ function renderQuickNoteForm(){
       </div>
       <div class="field">
         <label>症状</label>
-        <div class="chip-row" id="quickChipRow">${chips}</div>
+        <div class="chip-row" id="quickChipRow">${chips}<button type="button" class="heart-btn${heartOn}" id="quickHeartBtn" onclick="quickToggleHeartChoices()">❤️</button></div>
+        <div class="heart-choices" id="quickHeartChoices">
+          <button type="button" class="heart-choice-btn" data-val="あり" onclick="quickSelectHeart('あり')">あり</button>
+          <button type="button" class="heart-choice-btn" data-val="なし" onclick="quickSelectHeart('なし')">なし</button>
+        </div>
+        <div class="heart-label" id="quickHeartLabel">${currentQuickHeart || ''}</div>
       </div>
       <div class="field">
         <label>体重・体温</label>
@@ -1093,16 +1100,6 @@ function renderQuickNoteForm(){
             <span class="weight-unit">℃</span>
           </div>
         </div>
-      </div>
-      <div class="field">
-        <div class="heart-row">
-          <div class="heart-choices" id="quickHeartChoices">
-            <button type="button" class="heart-choice-btn" data-val="あり" onclick="quickSelectHeart('あり')">あり</button>
-            <button type="button" class="heart-choice-btn" data-val="なし" onclick="quickSelectHeart('なし')">なし</button>
-          </div>
-          <button type="button" class="heart-btn${heartOn}" id="quickHeartBtn" onclick="quickToggleHeartChoices()">❤</button>
-        </div>
-        <div class="heart-label" id="quickHeartLabel">${currentQuickHeart || ''}</div>
       </div>
       <button class="btn" onclick="saveQuickNote()">保存する</button>
       ${dailyNotes[quickNoteDate] ? `<button class="btn ghost" onclick="deleteQuickNote()">この日の記録を削除する</button>` : ''}
@@ -1295,7 +1292,12 @@ window.openNoteModal = function(dateStr){
 
         <div class="field">
           <label style="display:block;font-size:11.5px;color:var(--text-soft);margin-bottom:6px;">症状</label>
-          <div class="chip-row" id="chipRow">${chips}</div>
+          <div class="chip-row" id="chipRow">${chips}<button type="button" class="heart-btn" id="heartBtn" onclick="toggleHeartChoices()">❤️</button></div>
+          <div class="heart-choices" id="heartChoices">
+            <button type="button" class="heart-choice-btn" data-val="あり" onclick="selectHeart('あり')">あり</button>
+            <button type="button" class="heart-choice-btn" data-val="なし" onclick="selectHeart('なし')">なし</button>
+          </div>
+          <div class="heart-label" id="heartLabel"></div>
         </div>
 
         <div class="field">
@@ -1310,17 +1312,6 @@ window.openNoteModal = function(dateStr){
               <span class="weight-unit">℃</span>
             </div>
           </div>
-        </div>
-
-        <div class="field">
-          <div class="heart-row">
-            <div class="heart-choices" id="heartChoices">
-              <button type="button" class="heart-choice-btn" data-val="あり" onclick="selectHeart('あり')">あり</button>
-              <button type="button" class="heart-choice-btn" data-val="なし" onclick="selectHeart('なし')">なし</button>
-            </div>
-            <button type="button" class="heart-btn" id="heartBtn" onclick="toggleHeartChoices()">❤</button>
-          </div>
-          <div class="heart-label" id="heartLabel"></div>
         </div>
 
         <button class="menu-btn" onclick="saveNote('${dateStr}')">保存する</button>
