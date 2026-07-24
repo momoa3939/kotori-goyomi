@@ -234,15 +234,15 @@ header .sub{
 .cal-head .month{
   font-family:'Zen Maru Gothic',sans-serif;
   font-weight:700;
-  font-size:17.5px;
+  font-size:21px;
 }
 .cal-nav{
   background:var(--pink-light);
   border:none;
-  width:36px;height:36px;
+  width:44px;height:44px;
   border-radius:50%;
   color:var(--pink-deep);
-  font-size:19px;
+  font-size:23px;
   cursor:pointer;
 }
 .cal-grid{
@@ -252,14 +252,14 @@ header .sub{
   text-align:center;
 }
 .cal-grid .wd{
-  font-size:12.5px;
+  font-size:14.5px;
   color:var(--text-soft);
   padding-bottom:4px;
 }
 .cal-cell{
   position:relative;
-  width:44px;
-  height:44px;
+  width:48px;
+  height:48px;
   margin:0 auto;
   display:flex;
   flex-direction:column;
@@ -267,7 +267,7 @@ header .sub{
   justify-content:center;
   gap:2px;
   border-radius:50%;
-  font-size:14px;
+  font-size:18px;
   color:var(--text);
 }
 .cal-cell.empty{visibility:hidden;}
@@ -497,14 +497,16 @@ header .sub{
 .dot.sagedash{border:1.5px dashed var(--sage);background:transparent;}
 
 /* ---- history ---- */
+.history-item-block{
+  padding:10px 4px;
+  border-bottom:1px solid var(--line);
+}
+.history-item-block:last-child{border-bottom:none;}
 .history-item{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:10px 4px;
-  border-bottom:1px solid var(--line);
 }
-.history-item:last-child{border-bottom:none;}
 .hist-date{
   font-size:15.5px;
   color:var(--text);
@@ -521,6 +523,36 @@ header .sub{
   padding:3px 8px;
   border-radius:999px;
   margin-right:8px;
+  white-space:nowrap;
+}
+.bar-track{
+  position:relative;
+  height:22px;
+  background:var(--pink-light);
+  border-radius:11px;
+  margin-top:8px;
+  margin-bottom:4px;
+}
+.bar-fill{
+  position:absolute;
+  top:0; left:0;
+  height:100%;
+  min-width:24px;
+  background:var(--pink);
+  border-radius:11px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-size:11.5px;
+  font-weight:700;
+}
+.bar-cyclenum{
+  position:absolute;
+  top:50%;
+  transform:translate(-50%,-50%);
+  font-size:12.5px;
+  color:var(--text-soft);
   white-space:nowrap;
 }
 .del-btn{
@@ -574,6 +606,7 @@ viewMonth.setDate(1);
 let editingId = null;
 let showAddForm = false;
 let showHistory = true;
+let showFuturePredict = false;
 let showWeightList = true;
 let historyVisibleCount = 10;
 let weightVisibleCount = 10;
@@ -837,33 +870,48 @@ function renderHistory(){
   if(records.length===0) return '';
   const rev = [...records].reverse();
   const visible = rev.slice(0, historyVisibleCount);
+  const BAR_SCALE = 40; // バーの基準日数（この日数で満タン）
   let html = '';
   visible.forEach((r, idx)=>{
     const origIdx = records.length - 1 - idx;
-    let cyclenHtml = '';
+    let cycleLen = null;
     if(origIdx > 0){
-      const len = daysBetween(records[origIdx-1].start, r.start);
-      cyclenHtml = `<span class="hist-cyclen">周期 ${len}日</span>`;
+      cycleLen = daysBetween(records[origIdx-1].start, r.start);
     }
     const dateRange = r.end ? `${fmtYMD(r.start)} 〜 ${fmtShort(r.end)}` : `${fmtYMD(r.start)} 〜`;
-    const lenNote = r.end ? `${daysBetween(r.start,r.end)+1}日間` : '継続中';
+    const periodDays = r.end ? (daysBetween(r.start,r.end)+1) : null;
+    const lenNote = r.end ? `${periodDays}日間` : '継続中';
+
+    let barHtml = '';
+    if(periodDays){
+      const periodPct = Math.min(100, (periodDays/BAR_SCALE)*100);
+      const cycleMarker = cycleLen
+        ? `<span class="bar-cyclenum" style="left:${Math.min(94,(cycleLen/BAR_SCALE)*100)}%">${cycleLen}</span>`
+        : '';
+      barHtml = `
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${periodPct}%">${periodDays}</div>
+          ${cycleMarker}
+        </div>`;
+    }
+
     html += `
-    <div class="history-item">
-      <div>
-        <div class="hist-date">${dateRange}</div>
-        <div class="hist-sub">${lenNote}${r.note? ' ・ '+r.note : ''}</div>
+    <div class="history-item-block">
+      <div class="history-item">
+        <div>
+          <div class="hist-date">${dateRange}</div>
+          <div class="hist-sub">${lenNote}${r.note? ' ・ '+r.note : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;">
+          <button class="del-btn" onclick="startEdit('${r.id}')" title="編集する">✎</button>
+          <button class="del-btn" onclick="deleteRecord('${r.id}')" title="削除する">✕</button>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;">
-        ${cyclenHtml}
-        <button class="del-btn" onclick="startEdit('${r.id}')" title="編集する">✎</button>
-        <button class="del-btn" onclick="deleteRecord('${r.id}')" title="削除する">✕</button>
-      </div>
+      ${barHtml}
     </div>`;
   });
   if(rev.length > historyVisibleCount){
-    const remain = rev.length - historyVisibleCount;
-    const next = Math.min(10, remain);
-    html += `<button class="btn ghost" onclick="loadMoreHistory()">＋もっと見る（あと${remain}件・${next}件表示）</button>`;
+    html += `<button class="btn ghost" onclick="loadMoreHistory()">＋もっと見る</button>`;
   }
   return accordionCard('記録一覧', html, showHistory, 'toggleHistory');
 }
@@ -884,15 +932,15 @@ function renderWeightList(){
     if(hasVal(note.weight)) parts.push(`${note.weight}kg`);
     if(hasVal(note.temperature)) parts.push(`${note.temperature}℃`);
     html += `
-    <div class="history-item" onclick="openNoteModal('${d}')" style="cursor:pointer;">
-      <div class="hist-date">${fmtYMD(d)}</div>
-      <div class="hist-cyclen" style="margin-right:0;">${parts.join('　')}</div>
+    <div class="history-item-block">
+      <div class="history-item" onclick="openNoteModal('${d}')" style="cursor:pointer;">
+        <div class="hist-date">${fmtYMD(d)}</div>
+        <div class="hist-cyclen" style="margin-right:0;">${parts.join('　')}</div>
+      </div>
     </div>`;
   });
   if(entries.length > weightVisibleCount){
-    const remain = entries.length - weightVisibleCount;
-    const next = Math.min(10, remain);
-    html += `<button class="btn ghost" onclick="loadMoreWeightList()">＋もっと見る（あと${remain}件・${next}件表示）</button>`;
+    html += `<button class="btn ghost" onclick="loadMoreWeightList()">＋もっと見る</button>`;
   }
   return accordionCard('体重・体温の記録', html, showWeightList, 'toggleWeightList');
 }
@@ -905,6 +953,29 @@ function renderDataManage(){
     <button class="menu-btn danger" onclick="deleteAllData()">🗑 全データを削除する</button>
   `;
   return accordionCard('データ管理', body, showDataManage, 'toggleDataManage');
+}
+
+function renderFuturePredictions(stats){
+  if(!stats.last || !stats.predictNext) return '';
+  const {avgCycle, avgPeriod} = stats;
+  let cursorStart = stats.predictNext;
+  let html = '';
+  const COUNT = 6;
+  for(let i=0; i<COUNT; i++){
+    const end = addDays(cursorStart, avgPeriod-1);
+    html += `
+    <div class="history-item-block">
+      <div class="history-item">
+        <div>
+          <div class="hist-date">${fmtYMD(cursorStart)} 〜 ${fmtShort(end)}</div>
+          <div class="hist-sub">予測 ${avgPeriod}日間</div>
+        </div>
+        <span class="hist-cyclen">周期 ${avgCycle}日</span>
+      </div>
+    </div>`;
+    cursorStart = addDays(cursorStart, avgCycle);
+  }
+  return accordionCard('今後の生理予測', html, showFuturePredict, 'toggleFuturePredict');
 }
 
 function render(){
@@ -974,6 +1045,7 @@ function render(){
 
     ${renderCalendar(stats)}
     ${renderHistory()}
+    ${renderFuturePredictions(stats)}
     ${renderWeightList()}
     ${renderDataManage()}
   `;
@@ -1269,6 +1341,11 @@ window.loadMoreWeightList = function(){
 
 window.toggleDataManage = function(){
   showDataManage = !showDataManage;
+  render();
+};
+
+window.toggleFuturePredict = function(){
+  showFuturePredict = !showFuturePredict;
   render();
 };
 
