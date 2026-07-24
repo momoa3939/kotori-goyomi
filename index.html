@@ -1081,7 +1081,7 @@ function renderQuickNoteForm(){
       </div>
       <div class="field">
         <label>症状</label>
-        <div class="chip-row" id="quickChipRow">${chips}<button type="button" class="heart-btn${heartOn}" id="quickHeartBtn" onclick="quickToggleHeartChoices()">❤️</button></div>
+        <div class="chip-row" id="quickChipRow">${chips}<button type="button" class="heart-btn${heartOn}" id="quickHeartBtn" style="margin-left:auto;" onclick="quickToggleHeartChoices()">❤️</button></div>
         <div class="heart-choices" id="quickHeartChoices">
           <button type="button" class="heart-choice-btn" data-val="あり" onclick="quickSelectHeart('あり')">あり</button>
           <button type="button" class="heart-choice-btn" data-val="なし" onclick="quickSelectHeart('なし')">なし</button>
@@ -1292,7 +1292,7 @@ window.openNoteModal = function(dateStr){
 
         <div class="field">
           <label style="display:block;font-size:11.5px;color:var(--text-soft);margin-bottom:6px;">症状</label>
-          <div class="chip-row" id="chipRow">${chips}<button type="button" class="heart-btn" id="heartBtn" onclick="toggleHeartChoices()">❤️</button></div>
+          <div class="chip-row" id="chipRow">${chips}<button type="button" class="heart-btn" id="heartBtn" style="margin-left:auto;" onclick="toggleHeartChoices()">❤️</button></div>
           <div class="heart-choices" id="heartChoices">
             <button type="button" class="heart-choice-btn" data-val="あり" onclick="selectHeart('あり')">あり</button>
             <button type="button" class="heart-choice-btn" data-val="なし" onclick="selectHeart('なし')">なし</button>
