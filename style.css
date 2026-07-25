@@ -263,7 +263,7 @@ header .sub{
   color:var(--text);
 }
 .cal-cell.empty{visibility:hidden;}
-.cal-cell.period{background:var(--pink);color:#fff;font-weight:700;}
+.cal-cell.period{background:#F8C4D4;color:#fff;font-weight:700;}
 .cal-cell.predicted{border:1.5px dashed var(--pink);color:var(--pink-deep);}
 .cal-cell.fertile-mid{border:1.5px dashed var(--sage);}
 .cal-cell.fertile-peak{border:1.5px solid var(--sage);}
@@ -443,13 +443,16 @@ header .sub{
   color:var(--text-soft);
 }
 .ym-row select{
-  padding:8px 6px;
+  flex:1;
+  min-width:0;
+  padding:8px 4px;
   border-radius:12px;
   border:1.5px solid var(--line);
   font-size:15px;
   color:var(--text);
   background:#FFFDFC;
 }
+.ym-row span{flex-shrink:0;}
 .split-row .weight-input-row{flex:1;min-width:0;}
 
 .heart-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;}
@@ -542,7 +545,7 @@ header .sub{
 }
 .legend span{display:inline-flex;align-items:center;gap:4px;}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
-.dot.pink{background:var(--pink);}
+.dot.pink{background:#F8C4D4;}
 .dot.pinkline{border:1.5px dashed var(--pink);background:transparent;}
 .dot.sageline{border:1.5px solid var(--sage);background:transparent;}
 .dot.sagedash{border:1.5px dashed var(--sage);background:transparent;}
