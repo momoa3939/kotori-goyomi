@@ -90,6 +90,60 @@ function uid(){
   return 'r'+Date.now()+Math.floor(Math.random()*1000);
 }
 
+// ---- 年・月・日プルダウン共通ヘルパー ----
+function ymdYearOptions(selectedY){
+  const thisYear = new Date().getFullYear();
+  let html = `<option value=""${selectedY?'':' selected'}>-</option>`;
+  for(let y=thisYear-8; y<=thisYear+1; y++){
+    html += `<option value="${y}"${y===selectedY?' selected':''}>${y}</option>`;
+  }
+  return html;
+}
+function ymdMonthOptions(selectedM){
+  let html = `<option value=""${selectedM?'':' selected'}>-</option>`;
+  for(let mo=1; mo<=12; mo++){
+    html += `<option value="${mo}"${mo===selectedM?' selected':''}>${mo}</option>`;
+  }
+  return html;
+}
+function ymdDayOptions(selectedD, y, mo){
+  const maxDay = (y && mo) ? new Date(y, mo, 0).getDate() : 31;
+  const d = (selectedD && selectedD <= maxDay) ? selectedD : (selectedD ? maxDay : null);
+  let html = `<option value=""${d?'':' selected'}>-</option>`;
+  for(let day=1; day<=maxDay; day++){
+    html += `<option value="${day}"${day===d?' selected':''}>${day}</option>`;
+  }
+  return html;
+}
+function renderYMDRow(prefix, dateStr, changeFnName){
+  const [y, mo, d] = dateStr ? dateStr.split('-').map(Number) : [null,null,null];
+  return `
+    <div class="ym-row">
+      <select id="${prefix}Year" onchange="${changeFnName}()">${ymdYearOptions(y)}</select><span>年</span>
+      <select id="${prefix}Month" onchange="${changeFnName}()">${ymdMonthOptions(mo)}</select><span>月</span>
+      <select id="${prefix}Day" onchange="${changeFnName}()">${ymdDayOptions(d,y,mo)}</select><span>日</span>
+    </div>`;
+}
+function readYMDRow(prefix){
+  const yEl = document.getElementById(prefix+'Year');
+  const mEl = document.getElementById(prefix+'Month');
+  const dEl = document.getElementById(prefix+'Day');
+  if(!yEl || !mEl || !dEl) return '';
+  const y = yEl.value, mo = mEl.value, d = dEl.value;
+  if(!y || !mo || !d) return '';
+  return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function refreshYMDDayOptions(prefix){
+  const yEl = document.getElementById(prefix+'Year');
+  const mEl = document.getElementById(prefix+'Month');
+  const dEl = document.getElementById(prefix+'Day');
+  if(!yEl || !mEl || !dEl) return;
+  const y = Number(yEl.value) || null;
+  const mo = Number(mEl.value) || null;
+  const curD = Number(dEl.value) || null;
+  dEl.innerHTML = ymdDayOptions(curD, y, mo);
+}
+
 async function loadData(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -104,6 +158,7 @@ async function loadData(){
   }catch(e){
     dailyNotes = {};
   }
+  quickNoteOpen = false;
   render();
 }
 
@@ -189,13 +244,13 @@ function renderFlower(phase){
   return `<div class="flower-stage"><img src="${img}" alt="${alt}" style="width:100%;height:100%;object-fit:contain;"></div>`;
 }
 
+const BLOOD_BG_COLORS = {0:'#F8C4D4', 1:'#F193A9', 2:'#E4587A', 3:'#C62148', 4:'#B01D3F'};
+
 function noteMarkers(dateStr){
   const note = dailyNotes[dateStr];
   if(!note) return '';
-  const BLOOD_COLORS = {1:'#F4C6D3', 2:'#EDA0B8', 3:'#E5789D', 4:'#D94F82'};
   let m = '';
   if(note.symptoms && note.symptoms.length) m += '<span class="mark-symptom"></span>';
-  if(note.blood) m += `<span class="mark-blood" style="background:${BLOOD_COLORS[note.blood]||BLOOD_COLORS[4]}"></span>`;
   if(note.heart === 'あり') m += '<span class="mark-heart">❤️</span>';
   if(note.heart === 'なし') m += '<span class="mark-heart">💙</span>';
   if(note.weight || note.temperature) m += '<span class="mark-other"></span>';
@@ -250,7 +305,12 @@ function renderCalendar(stats){
     const cls = classify(dateStr);
     const todayClass = dateStr===todayStr ? ' today' : '';
     const noteDot = noteMarkers(dateStr);
-    cells += `<div class="cal-cell ${cls}" onclick="openDayMenu('${dateStr}')">
+    let periodStyle = '';
+    if(cls === 'period'){
+      const bloodLv = (dailyNotes[dateStr] && dailyNotes[dateStr].blood) || 0;
+      periodStyle = ` style="background:${BLOOD_BG_COLORS[bloodLv]};"`;
+    }
+    cells += `<div class="cal-cell ${cls}"${periodStyle} onclick="openDayMenu('${dateStr}')">
       <span class="cal-daynum${todayClass}">${d}</span>
       <span class="cal-marks">${noteDot}</span>
     </div>`;
@@ -274,9 +334,9 @@ function renderCalendar(stats){
       <span><span class="dot sageline"></span>妊娠しやすい(高)</span>
     </div>
     <div class="legend">
-      <span><span class="dot" style="background:var(--pink-deep);"></span>血量</span>
+      <span><span class="dot" style="background:#C62148;"></span>血量</span>
       <span><span class="dot" style="background:var(--sage);"></span>症状</span>
-      <span>❤️/💙 記録あり</span>
+      <span>❤️・💙</span>
       <span><span class="dot" style="background:#E8935A;"></span>体重・体温</span>
     </div>
   </div>`;
@@ -445,25 +505,10 @@ function renderQuickNoteForm(){
     const heartOn = currentQuickHeart==='あり' ? ' on' : (currentQuickHeart==='なし' ? ' on-blue' : '');
     const heartSymbol = currentQuickHeart==='あり' ? '❤️' : (currentQuickHeart==='なし' ? '💙' : '♡');
 
-    const [qy, qm] = quickNoteDate.split('-').map(Number);
-    const thisYear = new Date().getFullYear();
-    let yearOpts = '';
-    for(let y=thisYear-8; y<=thisYear+1; y++){
-      yearOpts += `<option value="${y}"${y===qy?' selected':''}>${y}</option>`;
-    }
-    let monthOpts = '';
-    for(let mo=1; mo<=12; mo++){
-      monthOpts += `<option value="${mo}"${mo===qm?' selected':''}>${mo}</option>`;
-    }
-
     body = `
       <div class="field">
         <label>日付</label>
-        <div class="ym-row">
-          <select id="quickYearSelect" onchange="quickJumpYM()">${yearOpts}</select><span>年</span>
-          <select id="quickMonthSelect" onchange="quickJumpYM()">${monthOpts}</select><span>月</span>
-        </div>
-        <input type="date" id="quickDateInput" value="${quickNoteDate}" onchange="quickDateChange(this.value)">
+        ${renderYMDRow('quick', quickNoteDate, 'quickJumpYMD')}
       </div>
       <div class="field">
         <label>生理の血量</label>
@@ -539,11 +584,11 @@ function render(){
   const bodyHtml = formVisible ? `
       <div class="field">
         <label>生理開始日</label>
-        <input type="date" id="inputStart" value="${editingId ? records.find(r=>r.id===editingId).start : ''}">
+        ${renderYMDRow('inputStart', editingId ? records.find(r=>r.id===editingId).start : '', 'onRecordYMDChange')}
       </div>
       <div class="field">
         <label>生理終了日（わかれば）</label>
-        <input type="date" id="inputEnd" value="${editingId && records.find(r=>r.id===editingId).end ? records.find(r=>r.id===editingId).end : ''}">
+        ${renderYMDRow('inputEnd', editingId && records.find(r=>r.id===editingId).end ? records.find(r=>r.id===editingId).end : '', 'onRecordYMDChange')}
       </div>
       <div class="field">
         <label>メモ（任意）</label>
@@ -574,7 +619,7 @@ function render(){
     ${formCard}
     ${renderQuickNoteForm()}
 
-    ${renderCalendar(stats)}
+    <div id="calendarSection">${renderCalendar(stats)}</div>
     ${renderHistory()}
     ${renderFuturePredictions(stats)}
     ${renderWeightList()}
@@ -603,6 +648,7 @@ window.openDayMenu = function(dateStr){
   let btns = '';
 
   if(rec){
+    btns += `<button class="menu-btn sage" onclick="openNoteModal('${dateStr}')">${hasNote ? '体調の記録を編集する' : '体調を記録する'}</button>`;
     btns += `<button class="menu-btn" onclick="menuEditRecord('${rec.id}')">この記録を編集する</button>`;
     btns += `<button class="menu-btn danger" onclick="menuDeleteRecord('${rec.id}')">この記録を削除する</button>`;
   }else{
@@ -610,8 +656,8 @@ window.openDayMenu = function(dateStr){
     if(openRec && dateStr >= openRec.start){
       btns += `<button class="menu-btn sage" onclick="menuSetEnd('${dateStr}','${openRec.id}')">この日を生理終了日にする</button>`;
     }
+    btns += `<button class="menu-btn sage" onclick="openNoteModal('${dateStr}')">${hasNote ? '体調の記録を編集する' : '体調を記録する'}</button>`;
   }
-  btns += `<button class="menu-btn sage" onclick="openNoteModal('${dateStr}')">${hasNote ? '体調の記録を編集する' : '体調を記録する'}</button>`;
   btns += `<button class="menu-btn cancel" onclick="closeDayMenu()">閉じる</button>`;
 
   document.getElementById('dayMenuOverlay').innerHTML = `
@@ -838,13 +884,14 @@ window.quickDateChange = function(val){
   if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
 };
 
-window.quickJumpYM = function(){
-  const y = Number(document.getElementById('quickYearSelect').value);
-  const m = Number(document.getElementById('quickMonthSelect').value);
-  const curDay = Number(quickNoteDate.split('-')[2]);
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const day = Math.min(curDay, daysInMonth);
-  const newDate = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+window.quickJumpYMD = function(){
+  refreshYMDDayOptions('quick');
+  const y = Number(document.getElementById('quickYear').value);
+  const m = Number(document.getElementById('quickMonth').value);
+  const d = Number(document.getElementById('quickDay').value);
+  if(!y || !m || !d) return;
+  viewMonth = new Date(y, m-1, 1);
+  const newDate = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   quickDateChange(newDate);
 };
 
@@ -946,9 +993,24 @@ window.changeMonth = function(delta){
   render();
 };
 
+window.onRecordYMDChange = function(){
+  refreshYMDDayOptions('inputStart');
+  refreshYMDDayOptions('inputEnd');
+  const sy = document.getElementById('inputStartYear').value, sm = document.getElementById('inputStartMonth').value;
+  const ey = document.getElementById('inputEndYear').value, em = document.getElementById('inputEndMonth').value;
+  let target = null;
+  if(sy && sm) target = {y:Number(sy), m:Number(sm)};
+  else if(ey && em) target = {y:Number(ey), m:Number(em)};
+  if(target){
+    viewMonth = new Date(target.y, target.m-1, 1);
+    const cal = document.getElementById('calendarSection');
+    if(cal) cal.innerHTML = renderCalendar(computeStats());
+  }
+};
+
 window.submitRecord = async function(){
-  const start = document.getElementById('inputStart').value;
-  const end = document.getElementById('inputEnd').value;
+  const start = readYMDRow('inputStart');
+  const end = readYMDRow('inputEnd');
   const note = document.getElementById('inputNote').value.trim();
   if(!start){
     await customAlert('生理開始日を入力してね');
@@ -982,7 +1044,7 @@ window.toggleFormAccordion = function(){
   showAddForm = !showAddForm;
   render();
   if(showAddForm){
-    const el = document.getElementById('inputStart');
+    const el = document.getElementById('inputStartYear');
     if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
   }
 };
@@ -1042,7 +1104,7 @@ window.startEdit = function(id){
   editingId = id;
   showAddForm = true;
   render();
-  const formCard = document.getElementById('inputStart');
+  const formCard = document.getElementById('inputStartYear');
   if(formCard) formCard.scrollIntoView({behavior:'smooth', block:'center'});
 };
 
