@@ -2,14 +2,15 @@
 // オフラインでも開けるように、アプリ本体を端末にキャッシュします。
 // データそのもの（記録）はlocalStorageに保存されるので、
 // ここでは「アプリの見た目や動き」だけをキャッシュしています。
-const CACHE_NAME = 'kotori-goyomi-v2';
+const CACHE_NAME = 'kotori-goyomi-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  './icon-512-maskable.png'
+  './icon-512-maskable.png',
+  './icon-192-maskable.png'
 ];
 self.addEventListener('install', (event) => {
   event.waitUntil(
